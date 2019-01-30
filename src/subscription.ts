@@ -20,9 +20,7 @@ import * as extend from 'extend';
 import {CallOptions} from 'google-gax';
 import * as is from 'is';
 import * as snakeCase from 'lodash.snakecase';
-
 import {google} from '../proto/pubsub';
-
 import {CreateSnapshotCallback, CreateSnapshotResponse, CreateSubscriptionCallback, CreateSubscriptionResponse, ExistsCallback, GetCallOptions, GetSubscriptionMetadataCallback, Metadata, PubSub, PushConfig, RequestCallback, SubscriptionCallOptions} from '.';
 import {IAM} from './iam';
 import {Snapshot} from './snapshot';
@@ -53,10 +51,6 @@ import {noop} from './util';
 /**
  * @see https://cloud.google.com/pubsub/docs/reference/rest/v1/projects.subscriptions#PushConfig
  */
-export interface PushConfig {
-  pushEndpoint: string;
-  attributes?: {[key: string]: string;};
-}
 
 /**
  * @see https://developers.google.com/protocol-buffers/docs/reference/google.protobuf#google.protobuf.Duration
@@ -208,8 +202,6 @@ export class Subscription extends EventEmitter {
   constructor(pubsub: PubSub, name: string, options?: SubscriptionCallOptions) {
     super();
 
-
-
     options = options || {};
 
     this.pubsub = pubsub;
@@ -298,6 +290,7 @@ export class Subscription extends EventEmitter {
    * // If the callback is omitted a Promise will be returned.
    * subscription.close().then(() => {});
    */
+
   close(): Promise<void>;
   close(callback: RequestCallback<void>): void;
   close(callback?: RequestCallback<void>): void|Promise<void> {
@@ -428,6 +421,7 @@ export class Subscription extends EventEmitter {
         typeof gaxOptsOrCallback === 'object' ? gaxOptsOrCallback : {};
     callback =
         typeof gaxOptsOrCallback === 'function' ? gaxOptsOrCallback : callback;
+
 
     callback = callback || noop;
     const reqOpts = {
@@ -767,17 +761,14 @@ export class Subscription extends EventEmitter {
    *
    * subscription.seek(date, callback);
    */
-  seek(snapshot: string|Date, gaxOpts?: CallOptions):
-      Promise<google.pubsub.v1.ISeekResponse>;
-  seek(snapshot: string|Date, callback: google.pubsub.v1.ISeekResponse): void;
-  seek(
-      snapshot: string|Date, gaxOpts: CallOptions,
-      callback: google.pubsub.v1.ISeekResponse): void;
+  seek(snapshot: string|Date, gaxOpts?: CallOptions): Promise<google.pubsub.v1.SeekResponse>;
+  seek(snapshot: string|Date, callback: google.pubsub.v1.Subscriber.SeekCallback): void;
+  seek(snapshot: string|Date, gaxOpts: CallOptions, callback: google.pubsub.v1.Subscriber.SeekCallback): void;
   seek(
       snapshot: string|Date,
-      gaxOptsOrCallback: CallOptions|google.pubsub.v1.ISeekResponse,
-      callback?: google.pubsub.v1.ISeekResponse):
-      void|Promise<google.pubsub.v1.ISeekResponse> {
+      gaxOptsOrCallback?: CallOptions|google.pubsub.v1.Subscriber.SeekCallback,
+      callback?: google.pubsub.v1.Subscriber.SeekCallback):
+      void|Promise<google.pubsub.v1.SeekResponse> {
     const gaxOpts =
         typeof gaxOptsOrCallback === 'object' ? gaxOptsOrCallback : {};
     callback =
@@ -904,7 +895,7 @@ export class Subscription extends EventEmitter {
    * const snapshot = subscription.snapshot('my-snapshot');
    */
   snapshot(name: string) {
-    return this.pubsub.snapshot.call(this, name);
+    return new Snapshot(this, name);
   }
   /**
    * Watches for incoming message event handlers and open/closes the

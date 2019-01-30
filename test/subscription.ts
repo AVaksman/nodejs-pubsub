@@ -868,14 +868,10 @@ describe('Subscription', () => {
   describe('snapshot', () => {
     const SNAPSHOT_NAME = 'a';
 
-    it('should call through to pubsub.snapshot', done => {
-      PUBSUB.snapshot = function(name) {
-        assert.strictEqual(this, subscription);
-        assert.strictEqual(name, SNAPSHOT_NAME);
-        done();
-      };
-
-      subscription.snapshot(SNAPSHOT_NAME);
+    it('should pass this as Subscription', done => {
+      const snapshot = subscription.snapshot(SNAPSHOT_NAME);
+      assert.ok(snapshot.calledWith_[0] instanceof Subscription);
+      done();
     });
   });
 });

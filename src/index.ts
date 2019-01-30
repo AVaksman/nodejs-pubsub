@@ -33,16 +33,16 @@ const PKG = require('../../package.json');
 const v1 = require('./v1');
 
 import {Snapshot} from './snapshot';
-import {Subscription, SubscriptionMetadata, SubscriptionMetadataRaw} from './subscription';
+import {Subscription, SubscriptionMetadataRaw} from './subscription';
 import {Topic, PublishOptions} from './topic';
 import {CallOptions} from 'google-gax';
 import {Readable} from 'stream';
 import {google} from '../proto/pubsub';
 import {ServiceError} from 'grpc';
+import {FlowControlOptions} from './lease-manager';
 
 const opts = {} as gax.GrpcClientOptions;
 const {grpc} = new gax.GrpcClient(opts);
-
 
 export interface GetSubscriptionMetadataCallback {
   (err: ServiceError|null, res?: google.pubsub.v1.Subscription|null): void;
@@ -61,23 +61,45 @@ export interface PushConfig {
   attibutes?: Map<string, string>;
 }
 
+export interface Inventory {
+  callbacks?: Array<RequestCallback<string>>;
+  queued?: Array<{}>;
+  bytes: number;
+}
+
+// export interface FlowControl {
+//   maxBytes?: number;
+//   maxMessages: number;
+//   allowExcessMessages: boolean;
+// }
+
+export interface Batching {
+  maxBytes?: number;
+  maxMessages: number;
+  maxMilliseconds?: number;
+}
+
+export interface PublisherCallOptions {
+  batching: Batching;
+  gaxOpts?: CallOptions;
+}
+
+export interface Attributes {
+  [key: string]: string;
+}
+
 
 export interface SubscriptionCallOptions {
-  flowControl?:
-      {maxBytes?: number, maxMessages?: number, allowExcessMessages: boolean;};
+  flowControl?: FlowControlOptions;
   maxConnections?: number;
   topic?: Topic;
   ackDeadline?: number;
   autoPaginate?: boolean;
   gaxOpts?: CallOptions;
-  batching?:
-      {maxBytes?: number, maxMessages?: number, maxMilliseconds?: number};
+  batching?: Batching;
 }
 
-export interface PublisherCallOptions {
-  batching?:
-      {maxBytes?: number, maxMessages?: number, maxMilliseconds?: number};
-}
+
 
 /**
  * @callback CreateTopicCallback
@@ -405,7 +427,7 @@ export class PubSub {
       name: subscription.name,
     });
 
-    this.request(
+    this.request<google.pubsub.v1.Subscription>(
         {
           client: 'SubscriberClient',
           method: 'createSubscription',
@@ -833,7 +855,7 @@ export class PubSub {
    * @param {function} [callback] The callback function.
    */
   // tslint:disable-next-line:no-any
-  request<TResponse = any>(
+   request<TResponse = any>(
       config: RequestConfig, callback: RequestCallback<TResponse>) {
     const self = this;
     this.getClient_(config, (err, client) => {

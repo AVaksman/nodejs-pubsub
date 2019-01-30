@@ -20,6 +20,7 @@ import * as proxyquire from 'proxyquire';
 import * as sinon from 'sinon';
 
 import * as util from '../src/util';
+import { PubSub, Subscription } from '../src';
 
 let promisified = false;
 const fakePromisify = Object.assign({}, pfy, {
@@ -41,11 +42,11 @@ describe('Snapshot', () => {
 
   const PUBSUB = {
     projectId: PROJECT_ID,
+    request (config, callback) {},
   };
 
   // tslint:disable-next-line no-any
-  const SUBSCRIPTION: any = {
-    Promise: {},
+  const SUBSCRIPTION = {
     projectId: PROJECT_ID,
     pubsub: PUBSUB,
     api: {},
@@ -84,8 +85,10 @@ describe('Snapshot', () => {
       assert(promisified);
     });
 
-    it('should localize parent.Promise', () => {
-      assert.strictEqual(snapshot.Promise, SUBSCRIPTION.Promise);
+    it('should localize parent.Promise', () => {	
+      const pubsub = new PubSub();
+      snapshot = pubsub.snapshot(SNAPSHOT_NAME);
+      assert.strictEqual(snapshot.Promise, pubsub.Promise);	
     });
 
     it('should localize the parent', () => {
@@ -117,23 +120,28 @@ describe('Snapshot', () => {
     });
 
     describe('with Subscription parent', () => {
+      let pubsub: PubSub;
+      let subscription: Subscription;
+      before(() => {
+        pubsub = new PubSub({projectId: PROJECT_ID});
+        subscription = pubsub.subscription('test');
+      })
       it('should include the create method', done => {
-        SUBSCRIPTION.createSnapshot = (name, callback) => {
-          assert.strictEqual(name, SNAPSHOT_NAME);
-          callback();  // The done function
-        };
-
-        const snapshot = new Snapshot(SUBSCRIPTION, SNAPSHOT_NAME);
+        sandbox.stub(subscription, 'createSnapshot').callsFake((name: String) => {
+          assert.strictEqual(name, FULL_SNAPSHOT_NAME);
+          done();
+        });
+        
+        const snapshot = new Snapshot(subscription, SNAPSHOT_NAME);
         snapshot.create(done);
       });
 
-      it('should create a seek method', done => {
-        SUBSCRIPTION.seek = (name, callback) => {
-          assert.strictEqual(name, SNAPSHOT_NAME);
-          callback();  // The done function
-        };
-
-        const snapshot = new Snapshot(SUBSCRIPTION, SNAPSHOT_NAME);
+      it('should call the seek method', done => {
+        sandbox.stub(subscription, 'seek').callsFake((snapshot) => {
+          assert.strictEqual(snapshot, FULL_SNAPSHOT_NAME);
+          done()
+        })
+        const snapshot = new Snapshot(subscription, SNAPSHOT_NAME);
         snapshot.seek(done);
       });
     });
@@ -145,12 +153,12 @@ describe('Snapshot', () => {
         snapshot = new Snapshot(PUBSUB, SNAPSHOT_NAME);
       });
 
-      it('should not include the create method', () => {
-        assert.strictEqual(snapshot.create, undefined);
+      it('should throw on create method', () => {
+        assert.throws(() => snapshot.create(), /This is only available if you accessed this object through {@link Subscription#snapshot}/);
       });
 
-      it('should not include a seek method', () => {
-        assert.strictEqual(snapshot.seek, undefined);
+      it('should throw on seek method', () => {
+        assert.throws(() => snapshot.seek(), /This is only available if you accessed this object through {@link Subscription#snapshot}/);
       });
     });
   });

@@ -23,6 +23,8 @@ const each = require('async-each');
 import * as extend from 'extend';
 import * as is from 'is';
 import {Topic} from './topic';
+import {Inventory, RequestCallback, Attributes} from '.';
+import {google} from '../proto/pubsub';
 
 export interface PublishCallback {
   (err: null|ServiceError, messageId: string): void;
@@ -80,7 +82,7 @@ export class Publisher {
   // tslint:disable-next-line variable-name
   Promise?: PromiseConstructor;
   topic: Topic;
-  inventory_;
+  inventory_: Inventory;
   settings!: PublishOptions;
   timeoutHandle_?: NodeJS.Timer;
   constructor(topic: Topic, options?: PublishOptions) {
@@ -157,17 +159,20 @@ export class Publisher {
    * //-
    * publisher.publish(data).then((messageId) => {});
    */
-  publish(data: Buffer, attributes?: object): Promise<string>;
+  publish(data: Buffer, attributes?: Attributes): Promise<string>;
   publish(data: Buffer, callback: PublishCallback): void;
-  publish(data: Buffer, attributes: object, callback: PublishCallback): void;
-  publish(data: Buffer, attributes?, callback?): Promise<string>|void {
+  publish(data: Buffer, attributes: Attributes, callback: PublishCallback):
+      void;
+  publish(data: Buffer, attributesOrCallback?, callback?): Promise<string>|
+      void {
     if (!(data instanceof Buffer)) {
       throw new TypeError('Data must be in the form of a Buffer.');
     }
-    if (is.fn(attributes)) {
-      callback = attributes;
-      attributes = {};
-    }
+    const attributes =
+        typeof attributesOrCallback === 'object' ? attributesOrCallback : {};
+    callback = typeof attributesOrCallback === 'function' ?
+        attributesOrCallback :
+        callback;
     // Ensure the `attributes` object only has string values
     for (const key of Object.keys(attributes)) {
       const value = attributes[key];
@@ -185,10 +190,10 @@ export class Publisher {
       this.publish_();
     }
     // add it to the queue!
-    this.queue_(data, attributes, callback);
+    this.queue_(data, attributes, callback!);
     // next lets check if this message brings us to the message cap or if we
     // hit the max byte limit
-    const hasMaxMessages = this.inventory_.queued.length === opts.maxMessages!;
+    const hasMaxMessages = this.inventory_.queued!.length === opts.maxMessages;
     if (this.inventory_.bytes >= opts.maxBytes! || hasMaxMessages) {
       this.publish_();
       return;
@@ -247,7 +252,7 @@ export class Publisher {
       topic: this.topic.name,
       messages,
     };
-    this.topic.request(
+    this.topic.request<google.pubsub.v1.PublishResponse>(
         {
           client: 'PublisherClient',
           method: 'publish',
@@ -256,11 +261,11 @@ export class Publisher {
         },
         (err, resp) => {
           const messageIds = arrify(resp && resp.messageIds);
-          each(callbacks, (callback, next) => {
-            const messageId = messageIds[callbacks.indexOf(callback)];
-            callback(err, messageId);
-            next();
-          });
+          each(callbacks,(callback: RequestCallback<string>,next: RequestCallback<string>) => {
+                const messageId = messageIds[callbacks!.indexOf(callback)];
+                callback(err, messageId);
+                next();
+              });
         });
   }
   /**
@@ -272,13 +277,17 @@ export class Publisher {
    * @param {object} attributes The message attributes.
    * @param {function} callback The callback function.
    */
-  queue_(data, attrs, callback) {
-    this.inventory_.queued.push({
+  queue_(data: Buffer, attrs: Attributes): Promise<string>;
+  queue_(data: Buffer, attrs: Attributes, callback: RequestCallback<string>):
+      void;
+  queue_(data: Buffer, attrs: Attributes, callback?: RequestCallback<string>):
+      void|Promise<string> {
+    this.inventory_.queued!.push({
       data,
       attributes: attrs,
     });
     this.inventory_.bytes += data.length;
-    this.inventory_.callbacks.push(callback);
+    this.inventory_.callbacks!.push(callback!);
   }
 }
 
